@@ -19,15 +19,33 @@ _books = []
 start = time.time()
 
 logger.info(f'Going through {page.page_count} pages of books...')
-for page_num in range(page.page_count):
+loop = asyncio.get_event_loop()
+
+async def fetch_page(session, url):
     page_start = time.time()
-    url = f'http://books.toscrape.com/catalogue/page-{page_num+1}.html'
-    logger.info(f'Requesting {url}')
-    page_content = requests.get(url).content
+    async with async_timeout.timeout(50):
+        async with session.get(url) as response:
+            print(f'page took {time.time() - page_start}')
+            return await response.text()
+
+
+async def get_multiple_pages(*urls2):
+    tasks = []
+    async with aiohttp.ClientSession() as session:
+        for url in urls2:
+            tasks.append(fetch_page(session, url))
+        grouped_tasks = asyncio.gather(*tasks)
+        return await grouped_tasks
+
+
+urls = [f'http://books.toscrape.com/catalogue/page-{i+ 1}.html' for i in range(page.page_count)]
+
+pages = loop.run_until_complete(get_multiple_pages(*urls))
+for page_content in pages:
     logger.debug('Creating AllBooksPage from page content.')
     page = BookComplete(page_content)
-    print(f'{url} took {time.time() - page_start}')
     _books.extend(page.books)
+
 print(f'Total took {time.time() - start}')
 
 bookse = _books
